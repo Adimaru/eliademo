@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: grid_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: db
+      POSTGRES_DB: grid_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    depends_on:
+      - db
+
+  frontend: # <-- UNCOMMENT THIS BLOCK
+    build:
+      context: ./frontend # Build from the frontend directory
+      args: # Pass build arguments to the Dockerfile
+        - REACT_APP_API_URL=http://localhost:8000 # URL the *browser* will use
+    restart: unless-stopped
+    ports:
+      - "3000:80" # Map host port 3000 to container's Nginx port 80
+    depends_on:
+      - backend # Frontend depends on backend for API calls
+    # volumes: # Optional: Mount local frontend code for hot-reloading during dev.
+    #   - ./frontend:/app # Uncomment later if needed, but for now, build from Dockerfile
+    #   - /app/node_modules # Prevent node_modules from being overwritten by host mount
+
+
+volumes:
+  db_data:

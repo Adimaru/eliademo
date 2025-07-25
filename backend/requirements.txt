@@ -1,0 +1,4 @@
+fastapi==0.111.0 # Use a specific version to ensure consistency
+uvicorn==0.30.1 # ASGI server to run FastAPI
+psycopg2-binary==2.9.9 # PostgreSQL adapter
+python-dotenv==1.0.1 # For local environment variables (optional, but good)
