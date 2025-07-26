@@ -62,8 +62,8 @@ const App: React.FC = () => {
       if (start || end) {
         url = `${apiUrl}/data/filter`;
         const params = new URLSearchParams();
-        if (start) params.append('start_timestamp', start);
-        if (end) params.append('end_timestamp', end);
+        if (start) params.append('start_timestamp', new Date(start).toISOString());
+        if (end) params.append('end_timestamp', new Date(end).toISOString());
         url = `${url}?${params.toString()}`;
       }
 
@@ -83,7 +83,41 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    // Initial fetch when the component mounts or filters change
     fetchData(startDate, endDate);
+
+    // Set up WebSocket connection
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/ws`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      const newData: GridData = JSON.parse(event.data);
+      console.log('New data received via WebSocket:', newData);
+
+      // Update the data state to include the new record
+      setData(prevData => {
+        const updatedData = [...prevData, newData].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        return updatedData;
+      });
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    // Clean up the WebSocket connection when the component unmounts
+    return () => {
+      ws.close();
+    };
   }, [startDate, endDate]);
 
   const chartData = {
@@ -92,14 +126,14 @@ const App: React.FC = () => {
       {
         label: 'Voltage (V)',
         data: data.map(item => item.voltage),
-        borderColor: 'rgb(255, 99, 132)',
-        backgroundColor: 'rgba(255, 99, 132, 0.5)',
+        borderColor: '#00eaff',
+        backgroundColor: 'rgba(0, 234, 255, 0.5)',
       },
       {
         label: 'Current (A)',
         data: data.map(item => item.current),
-        borderColor: 'rgb(53, 162, 235)',
-        backgroundColor: 'rgba(53, 162, 235, 0.5)',
+        borderColor: '#ff1493',
+        backgroundColor: 'rgba(255, 20, 147, 0.5)',
       },
     ],
   };
@@ -109,10 +143,35 @@ const App: React.FC = () => {
     plugins: {
       legend: {
         position: 'top' as const,
+        labels: {
+          color: '#b0b0b0',
+          font: {
+            family: '"Tomorrow"',
+          },
+        },
       },
       title: {
         display: true,
         text: 'Grid Voltage & Current Over Time',
+        color: '#e0e0e0',
+        font: {
+          family: '"Oxanium"',
+          size: 18,
+        },
+      },
+      tooltip: {
+        bodyFont: { family: '"Tomorrow"' },
+        titleFont: { family: '"Oxanium"' },
+      },
+    },
+    scales: {
+      x: {
+        ticks: { color: '#b0b0b0', font: { family: '"Tomorrow"' } },
+        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+      },
+      y: {
+        ticks: { color: '#b0b0b0', font: { family: '"Tomorrow"' } },
+        grid: { color: 'rgba(255, 255, 255, 0.1)' },
       },
     },
   };
@@ -120,9 +179,9 @@ const App: React.FC = () => {
   const handleGenerateData = async () => {
     try {
       const apiUrl = process.env.REACT_APP_API_URL || '';
+      // We no longer need to re-fetch data manually; the WebSocket will do it for us.
       const response = await fetch(`${apiUrl}/generate`, { method: 'POST' });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      await fetchData(); // Re-fetch to update the dashboard
     } catch (e: any) {
       console.error("Error generating data:", e);
     }
@@ -134,7 +193,7 @@ const App: React.FC = () => {
         const apiUrl = process.env.REACT_APP_API_URL || '';
         const response = await fetch(`${apiUrl}/data`, { method: 'DELETE' });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        await fetchData(); // Re-fetch to show an empty dashboard
+        await fetchData(); // We still need to fetch here to clear the local state
       } catch (e: any) {
         console.error("Error deleting data:", e);
       }
@@ -165,7 +224,7 @@ const App: React.FC = () => {
       </Typography>
 
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Stack direction="row" spacing={2} sx={{ mr: 2 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mr: 2 }}>
             <TextField
                 label="Start Date"
                 type="datetime-local"
@@ -217,7 +276,7 @@ const App: React.FC = () => {
               </Typography>
               {data.length > 0 ? (
                 <List dense>
-                  {data.slice(-10).reverse().map((item) => (
+                  {data.slice(-5).reverse().map((item) => (
                     <ListItem key={item.id} divider>
                       <ListItemText
                         primary={`Voltage: ${item.voltage}V, Current: ${item.current}A`}
