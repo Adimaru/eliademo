@@ -12,6 +12,8 @@ import {
   CircularProgress,
   Alert,
   Stack,
+  Button,
+  TextField
 } from '@mui/material';
 import { Line } from 'react-chartjs-2';
 import {
@@ -47,28 +49,42 @@ const App: React.FC = () => {
   const [data, setData] = useState<GridData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+
+  const fetchData = async (start?: string, end?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || '';
+      let url = `${apiUrl}/data`;
+
+      if (start || end) {
+        url = `${apiUrl}/data/filter`;
+        const params = new URLSearchParams();
+        if (start) params.append('start_timestamp', start);
+        if (end) params.append('end_timestamp', end);
+        url = `${url}?${params.toString()}`;
+      }
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const result: GridData[] = await response.json();
+      const sortedData = result.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      setData(sortedData);
+    } catch (e: any) {
+      setError(e.message);
+      console.error("Error fetching data:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchGridData = async () => {
-      try {
-        const apiUrl = process.env.REACT_APP_API_URL || '';
-        const response = await fetch(apiUrl + "/data");
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const result: GridData[] = await response.json();
-        const sortedData = result.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-        setData(sortedData);
-      } catch (e: any) {
-        setError(e.message);
-        console.error("Error fetching data:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchGridData();
-  }, []);
+    fetchData(startDate, endDate);
+  }, [startDate, endDate]);
 
   const chartData = {
     labels: data.map(item => new Date(item.timestamp).toLocaleTimeString()),
@@ -101,7 +117,31 @@ const App: React.FC = () => {
     },
   };
 
-  if (loading) {
+  const handleGenerateData = async () => {
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || '';
+      const response = await fetch(`${apiUrl}/generate`, { method: 'POST' });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      await fetchData(); // Re-fetch to update the dashboard
+    } catch (e: any) {
+      console.error("Error generating data:", e);
+    }
+  };
+
+  const handleDeleteData = async () => {
+    if (window.confirm('Are you sure you want to delete all data?')) {
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL || '';
+        const response = await fetch(`${apiUrl}/data`, { method: 'DELETE' });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        await fetchData(); // Re-fetch to show an empty dashboard
+      } catch (e: any) {
+        console.error("Error deleting data:", e);
+      }
+    }
+  };
+
+  if (loading && data.length === 0) {
     return (
       <Container sx={{ textAlign: 'center', mt: 5 }}>
         <CircularProgress />
@@ -123,6 +163,36 @@ const App: React.FC = () => {
       <Typography variant="h4" component="h1" gutterBottom sx={{ textAlign: 'center', fontWeight: 'bold' }}>
         Smart Grid Dashboard
       </Typography>
+
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Stack direction="row" spacing={2} sx={{ mr: 2 }}>
+            <TextField
+                label="Start Date"
+                type="datetime-local"
+                InputLabelProps={{ shrink: true }}
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+            />
+            <TextField
+                label="End Date"
+                type="datetime-local"
+                InputLabelProps={{ shrink: true }}
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+            />
+            <Button variant="contained" onClick={() => fetchData(startDate, endDate)}>
+                Apply Filter
+            </Button>
+        </Stack>
+        <Stack direction="row" spacing={2}>
+          <Button variant="contained" color="success" onClick={handleGenerateData}>
+            Generate Record
+          </Button>
+          <Button variant="contained" color="error" onClick={handleDeleteData}>
+            Delete All Data
+          </Button>
+        </Stack>
+      </Box>
 
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
         <Box sx={{ flex: 2 }}>
@@ -159,22 +229,6 @@ const App: React.FC = () => {
               ) : (
                 <Typography>No data found.</Typography>
               )}
-              <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-                <button onClick={async () => {
-                  try {
-                    const apiUrl = process.env.REACT_APP_API_URL || '';
-                    const response = await fetch(apiUrl + "/generate?num_records=1", { method: 'POST' });
-                    if (!response.ok) {
-                      throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    console.log("Record generated successfully.");
-                    // Re-fetch data to update the list
-                    window.location.reload();
-                  } catch (e: any) {
-                    console.error("Error generating data:", e);
-                  }
-                }}>Generate 1 More Record</button>
-              </Stack>
             </CardContent>
           </Card>
         </Box>

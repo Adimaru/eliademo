@@ -126,3 +126,74 @@ async def generate_grid_data(num_records: int = 10):
 @app.get("/", summary="Root endpoint")
 async def read_root():
     return {"message": "Welcome to the Grid Data API! Visit /docs for API documentation."}
+
+@app.get("/data/filter", response_model=list[GridData], summary="Retrieve filtered grid data")
+async def filter_grid_data(
+    start_timestamp: str | None = None,
+    end_timestamp: str | None = None,
+    limit: int = 100
+):
+    """
+    Retrieves simulated grid data from the database, filtered by an optional time range.
+    Timestamps should be in ISO format (e.g., "2025-07-26T10:00:00Z").
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        query = "SELECT id, timestamp, voltage, current, frequency FROM grid_data WHERE 1=1"
+        params = []
+
+        if start_timestamp:
+            query += " AND timestamp >= %s"
+            params.append(start_timestamp)
+
+        if end_timestamp:
+            query += " AND timestamp <= %s"
+            params.append(end_timestamp)
+
+        query += " ORDER BY timestamp DESC LIMIT %s"
+        params.append(limit)
+
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        cur.close()
+
+        data = []
+        for row in rows:
+            ts_aware = row[1].replace(tzinfo=timezone.utc) if row[1].tzinfo is None else row[1]
+            data.append(GridData(
+                id=row[0],
+                timestamp=ts_aware,
+                voltage=row[2],
+                current=row[3],
+                frequency=row[4]
+            ))
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve filtered data: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+@app.delete("/data", summary="Delete all grid data records")
+async def delete_all_data():
+    """
+    Deletes all simulated grid data from the database.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM grid_data")
+        conn.commit()
+        cur.close()
+        return {"message": "All grid data records have been deleted."}
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete data: {e}")
+    finally:
+        if conn:
+            conn.close()
