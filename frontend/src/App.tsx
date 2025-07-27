@@ -79,8 +79,6 @@ interface GridData {
   frequency: number;
 }
 
-
-
 const App: React.FC = () => {
   const [data, setData] = useState<GridData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -127,9 +125,20 @@ const App: React.FC = () => {
 
   useEffect(() => {
     fetchData(startDate, endDate);
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/ws`;
+    
+    // --- CORRECTED WEBSOCKET CODE START ---
+    const apiUrl = process.env.REACT_APP_API_URL;
+    if (!apiUrl) {
+      console.error("REACT_APP_API_URL is not set. WebSocket cannot connect.");
+      setWsStatus('disconnected');
+      return;
+    }
+
+    const wsProtocol = apiUrl.startsWith('https') ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${new URL(apiUrl).hostname}/ws`;
+    
     ws.current = new WebSocket(wsUrl);
+    // --- CORRECTED WEBSOCKET CODE END ---
 
     ws.current.onopen = () => {
       console.log('WebSocket connected');
