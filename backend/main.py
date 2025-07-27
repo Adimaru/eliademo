@@ -6,9 +6,9 @@ import json
 import asyncio
 from typing import Optional, List
 from dotenv import load_dotenv
+import psycopg2
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Body
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import google.generativeai as genai
@@ -41,8 +41,6 @@ origins = [
     "https://incandescent-empanada-b2c1da.netlify.app",
     "https://eliademo.onrender.com",
 ]
-
-
 
 app.add_middleware(
     CORSMiddleware,
