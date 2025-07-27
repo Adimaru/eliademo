@@ -5,3 +5,4 @@ pytest
 httpx
 google-generativeai
 psycopg2-binary
+SQLAlchemy
