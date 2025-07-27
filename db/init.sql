@@ -17,3 +17,4 @@ INSERT INTO grid_data (voltage, current, frequency) VALUES
 (230.1, 10.5, 50.0),
 (231.5, 12.1, 50.1),
 (229.8, 9.7, 49.9);
+

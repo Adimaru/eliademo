@@ -4,15 +4,30 @@ from datetime import datetime, timezone
 import psycopg2
 import json
 import asyncio
-from typing import Optional
+from typing import Optional, List
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+import google.generativeai as genai
+from google.generativeai import GenerativeModel
 
 load_dotenv()
+
+# --- AI Setup ---
+# Configure the Google Generative AI with the API key from .env
+# The application will fail to start if the key is not set.
+try:
+    genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+    model = GenerativeModel(model_name="gemini-1.5-flash")
+except Exception as e:
+    print(f"Failed to configure Google Generative AI: {e}")
+    # This will allow the rest of the application to run even if the AI is not configured
+    # The /report endpoint will still raise an HTTPException.
+    model = None
+
 
 app = FastAPI(
     title="Grid Data API",
@@ -38,7 +53,7 @@ class GridData(BaseModel):
     timestamp: datetime
     voltage: float
     current: float
-    frequency: float | None = None
+    frequency: Optional[float] = None
 
 class NewGridDataResponse(BaseModel):
     message: str
@@ -79,7 +94,7 @@ def get_db_connection():
         print(f"Database connection error: {e}")
         raise HTTPException(status_code=500, detail="Could not connect to the database.")
 
-@app.get("/data", response_model=list[GridData], summary="Retrieve latest grid data")
+@app.get("/data", response_model=List[GridData], summary="Retrieve latest grid data")
 async def get_grid_data(limit: int = 100):
     conn = None
     try:
@@ -112,12 +127,17 @@ async def generate_grid_data(num_records: int = 1):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        inserted_count = 0
 
         new_records = []
-        for _ in range(num_records):
-            voltage = round(random.uniform(220.0, 240.0), 2)
-            current = round(random.uniform(5.0, 25.0), 2)
+        for i in range(num_records):
+            # We'll use a random number to decide if an anomaly should occur
+            if random.random() < 0.1: # 10% chance of an anomaly
+                voltage = round(random.uniform(210.0, 214.0) if random.random() > 0.5 else random.uniform(246.0, 250.0), 2)
+                current = round(random.uniform(20.1, 30.0), 2)
+            else:
+                voltage = round(random.uniform(220.0, 240.0), 2)
+                current = round(random.uniform(5.0, 20.0), 2)
+
             frequency = round(random.uniform(49.9, 50.1), 2)
             timestamp = datetime.now(timezone.utc)
 
@@ -135,7 +155,6 @@ async def generate_grid_data(num_records: int = 1):
                 frequency=new_record_row[4]
             )
             new_records.append(new_record)
-            inserted_count += 1
 
         conn.commit()
         cur.close()
@@ -144,7 +163,7 @@ async def generate_grid_data(num_records: int = 1):
         for record in new_records:
             await manager.broadcast(json.dumps(record.model_dump(), default=str))
 
-        return {"message": f"Successfully inserted {inserted_count} new records.", "rows_inserted": inserted_count}
+        return {"message": f"Successfully inserted {len(new_records)} new records.", "rows_inserted": len(new_records)}
     except Exception as e:
         if conn:
             conn.rollback()
@@ -153,7 +172,7 @@ async def generate_grid_data(num_records: int = 1):
         if conn:
             conn.close()
 
-@app.get("/data/filter", response_model=list[GridData], summary="Retrieve filtered grid data")
+@app.get("/data/filter", response_model=List[GridData], summary="Retrieve filtered grid data")
 async def filter_grid_data(
     start_timestamp: Optional[str] = Query(None),
     end_timestamp: Optional[str] = Query(None),
@@ -217,12 +236,67 @@ async def delete_all_data():
         if conn:
             conn.close()
 
+@app.post("/report")
+async def generate_report(records: List[GridData] = Body(...)):
+    """Generate a summarized report based on provided data using AI."""
+    if not model:
+        raise HTTPException(status_code=500, detail="AI model is not configured. Please check GEMINI_API_KEY.")
+
+    if not records:
+        raise HTTPException(status_code=400, detail="No data provided to generate a report.")
+
+    # Convert records to a list of dictionaries for the prompt
+    records_dict = [record.model_dump() for record in records]
+
+    # Craft a detailed prompt for the AI
+    prompt = f"""
+    You are a smart grid data analyst. I will provide you with a list of smart grid sensor readings in JSON format.
+    Your task is to analyze this data and generate a professional, well-structured report.
+
+    The data contains the following fields: 'id', 'timestamp', 'voltage', 'current', and 'frequency'.
+
+    The report should include the following sections, formatted using Markdown:
+
+    # Smart Grid Analysis Report
+
+    ## 1. Overview
+    - Provide a high-level summary of the data, including the total number of records analyzed and the time range covered.
+
+    ## 2. Key Metrics
+    - **Average Voltage:** The average voltage across all records.
+    - **Average Current:** The average current across all records.
+    - **Peak Values:** The maximum voltage and maximum current recorded.
+    - **Min Values:** The minimum voltage and minimum current recorded.
+
+    ## 3. Anomaly Detection
+    - Anomaly thresholds are defined as:
+        - Voltage: below 215V or above 245V.
+        - Current: above 20A.
+    - Analyze the data to identify and count any records that fall outside these thresholds.
+    - Provide a summary of the anomalies detected.
+
+    ## 4. Conclusion & Recommendations
+    - Conclude with an overall assessment of the grid's stability during the analyzed period.
+    - Provide a brief recommendation based on the findings (e.g., "The grid appears stable" or "Further investigation into the voltage fluctuations is recommended").
+
+    Here is the data in JSON format:
+
+    {json.dumps(records_dict, indent=2, default=str)}
+    """
+
+    try:
+        # Generate content using the AI model
+        response = model.generate_content(prompt)
+        # The AI's response is in Markdown format, which is perfect for display
+        return {"report": response.text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate report with AI: {e}")
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # We expect the frontend to send a message to keep the connection alive, but we don't need to do anything with it.
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)

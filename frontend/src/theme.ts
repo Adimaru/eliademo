@@ -4,9 +4,9 @@ export const cyberpunkTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#00eaff', // Neon Cyan
-      light: '#6effff',
-      dark: '#00b7d4',
+      main: '#f9f002', // Neon Cyan
+      light: '#f9f002',
+      dark: '#f9f002',
       contrastText: '#000000',
     },
     secondary: {
@@ -35,8 +35,8 @@ export const cyberpunkTheme = createTheme({
     h1: {
       fontFamily: '"Advent Pro"',
       fontWeight: 700,
-      color: '#00eaff',
-      textShadow: '0 0 5px #00eaff, 0 0 10px #00eaff',
+      color: '#f9f002',
+      textShadow: '0 0 5px #f9f002, 0 0 10px #f9f002',
     },
     h4: {
       fontFamily: '"Oxanium"',
@@ -56,9 +56,9 @@ export const cyberpunkTheme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          border: '1px solid #00eaff',
+          border: '1px solid #f9f002',
           boxShadow: '0 0 15px rgba(0, 234, 255, 0.4)',
-          background: 'rgba(26, 27, 38, 0.8)',
+          background: 'rgba(0, 0, 0, 1)',
         },
       },
     },
@@ -71,9 +71,9 @@ export const cyberpunkTheme = createTheme({
           border: '1px solid',
         },
         contained: {
-          boxShadow: '0 0 5px rgba(0, 234, 255, 0.5)',
+          boxShadow: '0 0 5px rgba(0, 234, 255, 0)',
           '&:hover': {
-            boxShadow: '0 0 15px rgba(0, 234, 255, 0.8)',
+            boxShadow: '0 0 15px rgba(238, 255, 0, 0.8)',
           },
         },
       },
@@ -82,17 +82,17 @@ export const cyberpunkTheme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiInputLabel-root': {
-            color: '#b0b0b0',
+            color: '#ffffffff',
           },
           '& .MuiOutlinedInput-root': {
             '& fieldset': {
-              borderColor: '#00eaff',
+              borderColor: '#f9f002',
             },
             '&:hover fieldset': {
-              borderColor: '#6effff',
+              borderColor: '#f9f002',
             },
             '&.Mui-focused fieldset': {
-              borderColor: '#00eaff',
+              borderColor: '#f9f002',
             },
             color: '#e0e0e0',
           },
