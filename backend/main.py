@@ -1,7 +1,7 @@
 import os
 import random
 from datetime import datetime, timezone
-
+from fastapi.middleware.cors import CORSMiddleware
 import json
 import asyncio
 from typing import Optional, List
@@ -38,7 +38,11 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://incandescent-empanada-b2c1da.netlify.app",
+    "https://eliademo.onrender.com",
 ]
+
+
 
 app.add_middleware(
     CORSMiddleware,
