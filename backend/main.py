@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Body, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
 # --- Database Imports ---
 from sqlalchemy import create_engine, Column, Integer, Float, DateTime, text
@@ -29,8 +30,9 @@ except Exception as e:
     print(f"Failed to configure Google Generative AI: {e}")
     model = None
 
-# --- SQLAlchemy / SQLite Setup ---
-SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
+# --- SQLAlchemy / In-Memory SQLite Setup ---
+# Use an in-memory SQLite database which is reset on every application restart.
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
@@ -45,8 +47,7 @@ class GridDataModel(Base):
     current = Column(Float)
     frequency = Column(Float, nullable=True)
 
-Base.metadata.create_all(bind=engine)
-
+# Function to get a database session
 def get_db():
     db = SessionLocal()
     try:
@@ -54,18 +55,43 @@ def get_db():
     finally:
         db.close()
 
+# FastAPI application lifecycle management
+# We use this to run code when the app starts up and shuts down
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # This code runs on startup
+    print("Creating tables and inserting initial data...")
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        # Insert initial data
+        initial_records = [
+            GridDataModel(voltage=230.1, current=10.5, frequency=50.0),
+            GridDataModel(voltage=231.5, current=12.1, frequency=50.1),
+            GridDataModel(voltage=229.8, current=9.7, frequency=49.9),
+        ]
+        db.add_all(initial_records)
+        db.commit()
+        print("Initial data inserted successfully.")
+    except Exception as e:
+        print(f"Failed to insert initial data: {e}")
+        db.rollback()
+    finally:
+        db.close()
+    yield
+    # This code runs on shutdown
+    print("Application shutting down.")
+
 app = FastAPI(
     title="Grid Data API",
     description="API for simulating and retrieving grid data.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan # Link the lifespan function to the app
 )
 
-# --- NEW CODE ADDED HERE ---
-@app.get("/", summary="Root endpoint")
+# --- API Routes ---
+@app.get("/")
 async def read_root():
-    """
-    Welcomes users to the Grid Data API.
-    """
     return {"message": "Welcome to the Grid Data API. Use /docs for API documentation."}
 
 # --- CORS Middleware ---
@@ -234,3 +260,4 @@ async def health_check(db: Session = Depends(get_db)):
         return {"status": "healthy", "database_connection": "ok"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Service unhealthy: {e}")
+
