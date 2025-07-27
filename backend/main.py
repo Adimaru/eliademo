@@ -1,7 +1,7 @@
 import os
 import random
 from datetime import datetime, timezone
-import psycopg2
+
 import json
 import asyncio
 from typing import Optional, List
