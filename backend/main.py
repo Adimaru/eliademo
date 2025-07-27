@@ -7,6 +7,7 @@ from typing import Optional, List
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Body, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # --- Database Imports ---
@@ -34,7 +35,7 @@ engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_declarative_base()
+Base = declarative_base()
 
 class GridDataModel(Base):
     __tablename__ = "grid_data"
@@ -120,7 +121,6 @@ async def generate_grid_data(db: Session = Depends(get_db), num_records: int = 1
         else:
             voltage = round(random.uniform(220.0, 240.0), 2)
             current = round(random.uniform(5.0, 20.0), 2)
-
         frequency = round(random.uniform(49.9, 50.1), 2)
         timestamp = datetime.now(timezone.utc)
         new_record = GridDataModel(
