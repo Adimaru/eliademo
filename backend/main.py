@@ -60,6 +60,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# --- NEW CODE ADDED HERE ---
+@app.get("/", summary="Root endpoint")
+async def read_root():
+    """
+    Welcomes users to the Grid Data API.
+    """
+    return {"message": "Welcome to the Grid Data API. Use /docs for API documentation."}
+
 # --- CORS Middleware ---
 origins = [
     "http://localhost:3000",
@@ -105,7 +113,7 @@ class ConnectionManager:
             await connection.send_text(message)
 manager = ConnectionManager()
 
-# --- API Routes ---
+# --- Existing API Routes ---
 @app.get("/data", response_model=List[GridData], summary="Retrieve latest grid data")
 async def get_grid_data(db: Session = Depends(get_db), limit: int = 100):
     data = db.query(GridDataModel).order_by(GridDataModel.timestamp.desc()).limit(limit).all()
