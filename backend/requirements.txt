@@ -4,3 +4,4 @@ python-dotenv==1.0.1 # For local environment variables (optional, but good)
 pytest
 httpx
 google-generativeai
+psycopg2-binary
